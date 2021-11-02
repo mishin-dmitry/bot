@@ -21,7 +21,9 @@ def get_text_message(message: Message):
         handler = HighpriceHandler()
         handler.initialize_handler(message)
     else:
-        bot.send_message(message.from_user.id, "Я тебя не понимаю. Напиши /help.")
+        bot.send_message(
+            message.from_user.id, "Я тебя не понимаю. Напиши /help."
+        )
 
 
 @bot.callback_query_handler(func=lambda call: True)

@@ -22,13 +22,16 @@ class PriceHandler:
         user.sort_order = "PRICE"
 
     def initialize_handler(self, message: Message) -> None:
-        bot.send_message(message.from_user.id, "Введите город в котором смотрим отели")
+        bot.send_message(
+            message.from_user.id, "Введите город в котором смотрим отели"
+        )
         bot.register_next_step_handler(message, self.__get_city)
 
     def continue_chain(self, call: CallbackQuery) -> None:
         bot.send_message(
             call.message.chat.id,
-            "Введите количество отелей, которые необходимо вывести в результате",
+            "Введите количество отелей, которые необходимо вывести в"
+            " результате",
         )
         bot.register_next_step_handler(call.message, self.__get_hotels_count)
 
@@ -67,7 +70,9 @@ class PriceHandler:
 
         question = "Уточните адрес:"
 
-        bot.send_message(message.from_user.id, text=question, reply_markup=keyboard)
+        bot.send_message(
+            message.from_user.id, text=question, reply_markup=keyboard
+        )
 
     def __get_hotels_count(self, message: Message) -> None:
         try:
@@ -78,7 +83,9 @@ class PriceHandler:
                     message.from_user.id,
                     f"Максимальное количеств отелей - {self.MAX_HOTELS_COUNT}",
                 )
-                bot.register_next_step_handler(message, self.__get_hotels_count)
+                bot.register_next_step_handler(
+                    message, self.__get_hotels_count
+                )
 
                 return
 
@@ -98,18 +105,25 @@ class PriceHandler:
         if message.text:
             if message.text.lower() == "да":
                 user.should_show_photo = True
-                bot.send_message(message.from_user.id, "Сколько фотографий показывать?")
+                bot.send_message(
+                    message.from_user.id, "Сколько фотографий показывать?"
+                )
                 bot.register_next_step_handler(message, self.__get_photo_count)
             elif message.text.lower() == "нет":
                 user.should_show_photo = False
-                bot.send_message(message.from_user.id, "Ожидайте, собираю информацию")
+                bot.send_message(
+                    message.from_user.id, "Ожидайте, собираю информацию"
+                )
                 self.__collect_data(message)
 
             else:
                 bot.send_message(
-                    message.from_user.id, "Что-то не понятно. Напишите да или нет"
+                    message.from_user.id,
+                    "Что-то не понятно. Напишите да или нет",
                 )
-                bot.register_next_step_handler(message, self.__get_photo_access)
+                bot.register_next_step_handler(
+                    message, self.__get_photo_access
+                )
 
     def __get_photo_count(self, message: Message) -> None:
         try:
@@ -118,7 +132,8 @@ class PriceHandler:
             if user.photo_count > self.MAX_PHOTO_COUNT:
                 bot.send_message(
                     message.from_user.id,
-                    f"Максимальное количеств фотографий - {self.MAX_PHOTO_COUNT}",
+                    "Максимальное количеств фотографий -"
+                    f" {self.MAX_PHOTO_COUNT}",
                 )
                 bot.register_next_step_handler(message, self.__get_photo_count)
 
@@ -143,7 +158,9 @@ class PriceHandler:
 
         self.__send_info_to_user(message, hotels)
 
-    def __send_info_to_user(self, message: Message, hotels: List[Hotel]) -> None:
+    def __send_info_to_user(
+        self, message: Message, hotels: List[Hotel]
+    ) -> None:
         if not len(hotels):
             bot.send_message(
                 message.from_user.id,
@@ -180,14 +197,18 @@ class PriceHandler:
                 bot.send_message(message.from_user.id, text)
 
     def __get_hotel_photos(self, id: int) -> List[str]:
-        raw_data = self.__api.send_request("/properties/get-hotel-photos", {"id": id})
+        raw_data = self.__api.send_request(
+            "/properties/get-hotel-photos", {"id": id}
+        )
         photos = raw_data.get("hotelImages", [])
 
         if not len(photos):
             return photos
 
         chunk_length: int = (
-            len(photos) if user.photo_count >= len(photos) else user.photo_count
+            len(photos)
+            if user.photo_count >= len(photos)
+            else user.photo_count
         )
 
         return list(
