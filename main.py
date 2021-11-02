@@ -1,24 +1,30 @@
+from typing import Union
 from loaders import bot, user
 from telebot.types import CallbackQuery, Message
-from handlers import HighpriceHandler, PriceHandler
+from handlers import BestdealHandler, HighpriceHandler, Handler
 
 
-handler = None
+handler: Union[Handler, HighpriceHandler, BestdealHandler, None] = None
 
 
 @bot.message_handler(content_types=["text"])
 def get_text_message(message: Message):
-    global handler
-
     if message.text and (
         message.text.lower() == "привет" or message.text == "/hello-world"
     ):
         bot.send_message(message.from_user.id, "Привет, чем я могу помочь?")
-    elif message.text == "/lowprice":
-        handler = PriceHandler()
-        handler.initialize_handler(message)
-    elif message.text == "/highprice":
-        handler = HighpriceHandler()
+    if message.text in ["/lowprice", "/highprice", "/bestdeal"]:
+        user.clear_data()
+
+        global handler
+
+        if message.text == "/lowprice":
+            handler = Handler()
+        elif message.text == "/highprice":
+            handler = HighpriceHandler()
+        elif message.text == "/bestdeal":
+            handler = BestdealHandler()
+
         handler.initialize_handler(message)
     else:
         bot.send_message(
