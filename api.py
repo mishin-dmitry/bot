@@ -17,12 +17,9 @@ class Api:
     }
 
     def send_request(
-        # NOTE а как лучше анотацию для union делать вместо any?
-        # я пробовал Dict[str, Any], я пробовал Dict[str, Union[str, int]]
-        # и если в запросе только строки в значениях, то он ошибку выдает
         self,
         endpoint: str,
-        querystring: Dict[str, Any],
+        querystring: Dict[str, str],
         method="GET",
     ) -> Dict[str, Any]:
         url = f"https://{API_HOST}{endpoint}"

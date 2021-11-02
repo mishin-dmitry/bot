@@ -9,8 +9,8 @@ from telebot.types import (
     InputMediaPhoto,
     Message,
 )
-from utils.types import Hotel
 from loaders import user
+from hotel import Hotel
 
 
 class PriceHandler:
@@ -173,15 +173,15 @@ class PriceHandler:
             photos: List[str] = []
 
             if user.should_show_photo is True:
-                photos = self.__get_hotel_photos(hotel["id"])
+                photos = self.__get_hotel_photos(hotel.id)
 
-            text: str = hotel["name"]
+            text: str = hotel.name
 
-            if hotel["address"]:
-                text += f"\n{hotel['address']}"
+            if hotel.address:
+                text += f"\n{hotel.address}"
 
-            text += f"\nРасположение от центра - {hotel['distance']}."
-            text += f"\nСтоимость - {hotel['price'].replace('RUB', 'рублей')}."
+            text += f"\nРасположение от центра - {hotel.distance}."
+            text += f"\nСтоимость - {hotel.price.replace('RUB', 'рублей')}."
 
             if len(photos):
                 bot.send_media_group(
@@ -196,7 +196,7 @@ class PriceHandler:
             else:
                 bot.send_message(message.from_user.id, text)
 
-    def __get_hotel_photos(self, id: int) -> List[str]:
+    def __get_hotel_photos(self, id: str) -> List[str]:
         raw_data = self.__api.send_request(
             "/properties/get-hotel-photos", {"id": id}
         )
@@ -221,9 +221,9 @@ class PriceHandler:
     def __get_hotel_suggestions(self) -> List[Hotel]:
         querystring = {
             "destinationId": user.city,
-            "pageNumber": 1,
+            "pageNumber": "1",
             "pageSize": user.hotels_count,
-            "adults1": 1,
+            "adults1": "1",
             "locale": "ru_RU",
             "sortOrder": user.sort_order,
             "currency": "RUB",
@@ -239,21 +239,19 @@ class PriceHandler:
         return list(map(self.__extract_info_about_hotel, result))
 
     def __extract_info_about_hotel(self, hotel: Dict[str, Any]) -> Hotel:
+        distance: str = [
+            info["distance"]
+            for info in hotel["landmarks"]
+            if info["label"] == "Центр города"
+        ][0]
 
-        return {
-            # NOTE а подскажите почему тут если убрать нижнюю строку,
-            # то появляется ошибка
-            # type: ignore[override]
-            "id": hotel["id"],
-            "address": hotel["address"].get("streetAddress", ""),
-            "distance": [
-                info["distance"]
-                for info in hotel["landmarks"]
-                if info["label"] == "Центр города"
-            ][0],
-            "price": hotel["ratePlan"]["price"]["current"],
-            "name": hotel["name"],
-        }
+        return Hotel(
+            hotel["id"],
+            hotel["address"].get("streetAddress", ""),
+            distance,
+            hotel["ratePlan"]["price"]["current"],
+            hotel["name"],
+        )
 
 
 class HighpriceHandler(PriceHandler):
