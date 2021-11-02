@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 from api import Api
 from requests.exceptions import RequestException
 from typing import Any, Dict, List
@@ -13,7 +14,17 @@ from loaders import user
 from hotel import Hotel
 
 
-class PriceHandler:
+class Handler(ABC):
+    @abstractmethod
+    def initialize_handler(self, message: Message) -> None:
+        raise NotImplementedError("method should be implemented")
+
+    @abstractmethod
+    def continue_chain(self, call: CallbackQuery) -> None:
+        raise NotImplementedError("method should be implemented")
+
+
+class PriceHandler(Handler):
     MAX_HOTELS_COUNT: int = 5
     MAX_PHOTO_COUNT: int = 5
 
