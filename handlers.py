@@ -1,8 +1,9 @@
 from abc import ABC, abstractmethod
 from api import Api
+from datetime import datetime
 from requests.exceptions import RequestException
-from typing import Any, Dict, List, Union
-from loaders import bot
+from typing import Any, Dict, List, Tuple, Union
+from loaders import bot, cur
 from telebot.types import (
     CallbackQuery,
     InlineKeyboardButton,
@@ -10,8 +11,10 @@ from telebot.types import (
     InputMediaPhoto,
     Message,
 )
-from loaders import user
+from user import User
 from hotel import Hotel
+
+import json
 
 
 class AbsHandler(ABC):
@@ -25,9 +28,11 @@ class AbsHandler(ABC):
 
 
 class Handler(AbsHandler):
-    def __init__(self) -> None:
+    def __init__(self, user: User) -> None:
         self.__api = Api()
-        user.sort_order = "PRICE"
+        self._user = user
+        self._user.sort_order = "PRICE"
+        self._command = "/lowprice"
 
     def initialize_handler(self, message: Message) -> None:
         bot.send_message(
@@ -114,11 +119,11 @@ class Handler(AbsHandler):
         return value
 
     def __get_hotels_count(self, message: Message) -> None:
-        user.hotels_count = self._get_int_float_value(
-            message, boundary=user.MAX_HOTELS_COUNT
+        self._user.hotels_count = self._get_int_float_value(
+            message, boundary=self._user.MAX_HOTELS_COUNT
         )
 
-        if user.hotels_count == 0:
+        if self._user.hotels_count == 0:
             bot.register_next_step_handler(message, self.__get_hotels_count)
 
             return
@@ -132,13 +137,13 @@ class Handler(AbsHandler):
     def __get_photo_access(self, message: Message) -> None:
         if message.text:
             if message.text.lower() == "да":
-                user.should_show_photo = True
+                self._user.should_show_photo = True
                 bot.send_message(
                     message.from_user.id, "Сколько фотографий показывать?"
                 )
                 bot.register_next_step_handler(message, self.__get_photo_count)
             elif message.text.lower() == "нет":
-                user.should_show_photo = False
+                self._user.should_show_photo = False
                 self._start_collect_data(message)
 
             else:
@@ -151,11 +156,11 @@ class Handler(AbsHandler):
                 )
 
     def __get_photo_count(self, message: Message) -> None:
-        user.photo_count = self._get_int_float_value(
-            message, boundary=user.MAX_PHOTO_COUNT
+        self._user.photo_count = self._get_int_float_value(
+            message, boundary=self._user.MAX_PHOTO_COUNT
         )
 
-        if user.photo_count == 0:
+        if self._user.photo_count == 0:
             bot.register_next_step_handler(message, self.__get_photo_count)
 
             return
@@ -173,12 +178,35 @@ class Handler(AbsHandler):
             )
 
     def _collect_data(self, message: Message) -> None:
-        hotels: List[Hotel] = self._get_hotel_suggestions()
+        hotels: List[Hotel] = self._get_hotel_suggestions(
+            self._user.hotels_count
+        )
+        now = datetime.now()
+        datetime_string = now.strftime("%d/%m/%Y %H:%M:%S")
 
-        self._send_info_to_user(message, hotels)
+        if cur:
+            cur.execute(
+                f"""INSERT INTO requests
+                (user_id, command, date_time)
+                VALUES(
+                    {message.from_user.id},
+                    '{self._command}',
+                    '{datetime_string}'
+                )"""
+            )
+
+            cur.execute(
+                f"""SELECT id FROM requests
+                WHERE user_id == {message.from_user.id}
+                AND date_time == '{datetime_string}'"""
+            )
+
+            request_id = cur.fetchone()[0]
+
+            self._send_info_to_user(message, hotels, request_id)
 
     def _send_info_to_user(
-        self, message: Message, hotels: List[Hotel]
+        self, message: Message, hotels: List[Hotel], request_id: int
     ) -> None:
         if not len(hotels):
             bot.send_message(
@@ -191,7 +219,7 @@ class Handler(AbsHandler):
         for hotel in hotels:
             photos: List[str] = []
 
-            if user.should_show_photo is True:
+            if self._user.should_show_photo is True:
                 photos = self.__get_hotel_photos(hotel.id)
 
             text: str = hotel.name
@@ -207,6 +235,14 @@ class Handler(AbsHandler):
             )
 
             if len(photos):
+                images_str = json.dumps(photos)
+
+                if cur:
+                    cur.execute(
+                        f"""INSERT INTO hotels (request_id, description, photos)
+                        VALUES({request_id}, '{text}', '{images_str}')"""
+                    )
+
                 bot.send_media_group(
                     message.from_user.id,
                     [
@@ -217,6 +253,12 @@ class Handler(AbsHandler):
                     ],
                 )
             else:
+                if cur:
+                    cur.execute(
+                        f"""INSERT INTO hotels (request_id, description)
+                        VALUES({request_id}, '{text}')"""
+                    )
+
                 bot.send_message(message.from_user.id, text)
 
     def __get_hotel_photos(self, id: str) -> List[str]:
@@ -230,8 +272,8 @@ class Handler(AbsHandler):
 
         chunk_length: int = (
             len(photos)
-            if user.photo_count >= len(photos)
-            else user.photo_count
+            if self._user.photo_count >= len(photos)
+            else self._user.photo_count
         )
 
         return list(
@@ -242,14 +284,14 @@ class Handler(AbsHandler):
         )
 
     def _get_hotel_suggestions(
-        self, page_size: Union[int, None] = user.hotels_count
+        self, page_size: Union[int, None] = None
     ) -> List[Hotel]:
         querystring = {
-            "destinationId": user.city,
+            "destinationId": self._user.city,
             "pageNumber": "1",
             "adults1": "1",
             "locale": "ru_RU",
-            "sortOrder": user.sort_order,
+            "sortOrder": self._user.sort_order,
             "currency": "RUB",
         }
 
@@ -274,7 +316,7 @@ class Handler(AbsHandler):
 
         distance: str = "0"
 
-        if len(distance):
+        if len(distance_list):
             distance = distance_list[0]
 
         price_str: str = (
@@ -296,17 +338,19 @@ class Handler(AbsHandler):
 
 
 class HighpriceHandler(Handler):
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, user: User) -> None:
+        super().__init__(user)
 
-        user.sort_order = "PRICE_HIGHEST_FIRST"
+        self._user.sort_order = "PRICE_HIGHEST_FIRST"
+        self._command = "/highprice"
 
 
 class BestdealHandler(Handler):
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, user: User) -> None:
+        super().__init__(user)
 
-        user.sort_order = "PRICE"
+        self._user.sort_order = "PRICE"
+        self._command = "/bestdeal"
 
     def _start_collect_data(self, message: Message) -> None:
         bot.send_message(
@@ -323,7 +367,7 @@ class BestdealHandler(Handler):
 
             return
 
-        user.add_price(min)
+        self._user.add_price(min)
 
         bot.send_message(
             message.from_user.id,
@@ -339,7 +383,7 @@ class BestdealHandler(Handler):
 
             return
 
-        if max <= user.price_range[0]:
+        if max <= self._user.price_range[0]:
             bot.send_message(
                 message.from_user.id,
                 "Верхний придел должен быть больше нижнего",
@@ -348,7 +392,7 @@ class BestdealHandler(Handler):
 
             return
 
-        user.add_price(max)
+        self._user.add_price(max)
 
         bot.send_message(
             message.from_user.id,
@@ -364,7 +408,7 @@ class BestdealHandler(Handler):
 
             return
 
-        user.add_distance(min)
+        self._user.add_distance(min)
 
         bot.send_message(
             message.from_user.id,
@@ -380,7 +424,7 @@ class BestdealHandler(Handler):
 
             return
 
-        if max <= user.distance_range[0]:
+        if max <= self._user.distance_range[0]:
             bot.send_message(
                 message.from_user.id,
                 "Верхний придел должен быть больше нижнего",
@@ -389,7 +433,7 @@ class BestdealHandler(Handler):
 
             return
 
-        user.add_distance(max)
+        self._user.add_distance(max)
 
         bot.send_message(message.from_user.id, "Ожидайте собираю информацию")
 
@@ -398,23 +442,10 @@ class BestdealHandler(Handler):
     def __find_appropriate_hotels(self, hotels: List[Hotel]) -> List[Hotel]:
         result = []
 
-        price_min, price_max = user.price_range
-        distance_min, distance_max = user.distance_range
-
-        print(
-            "price_min",
-            price_min,
-            "price_max",
-            price_max,
-            "distance_min",
-            distance_min,
-            "distance_max",
-            distance_max,
-        )
+        price_min, price_max = self._user.price_range
+        distance_min, distance_max = self._user.distance_range
 
         for hotel in hotels:
-            print("hotel.price", hotel.price)
-            print("hotel.distance", hotel.distance)
             if hotel.price > price_max or hotel.price < price_min:
                 continue
 
@@ -422,15 +453,13 @@ class BestdealHandler(Handler):
                 continue
 
             price_ration = 100 * (hotel.price - price_min) / hotel.price
-            print("price_ration", price_ration)
             distance_ratio = (
                 100 * (hotel.distance - distance_min) / hotel.distance
             )
-            print("distance_ratio", distance_ratio)
 
             ratio = price_ration + distance_ratio
 
-            if len(result) < user.hotels_count:
+            if len(result) < self._user.hotels_count:
                 result.append({"hotel": hotel, "ratio": ratio})
             else:
                 for i, i_hotel in enumerate(result):
@@ -442,7 +471,94 @@ class BestdealHandler(Handler):
         return list(map(lambda x: x["hotel"], result))
 
     def _collect_data(self, message: Message) -> None:
-        hotels = self._get_hotel_suggestions(None)
+        hotels = self._get_hotel_suggestions()
         hotels = self.__find_appropriate_hotels(hotels)
 
-        self._send_info_to_user(message, hotels)
+        now = datetime.now()
+        datetime_string = now.strftime("%d/%m/%Y %H:%M:%S")
+
+        if cur:
+            cur.execute(
+                f"""INSERT INTO requests
+                (user_id, command, date_time)
+                VALUES(
+                    {message.from_user.id},
+                    '{self._command}',
+                    '{datetime_string}'
+                )"""
+            )
+
+            cur.execute(
+                f"""SELECT id FROM requests
+                WHERE user_id == {message.from_user.id}
+                AND date_time == {datetime_string}"""
+            )
+
+            request_id = cur.fetchone()[0]
+
+            self._send_info_to_user(message, hotels, request_id)
+
+
+class History:
+    def __get_hotel_info_by_request_id(self, id: int) -> List[Tuple]:
+        if cur:
+            cur.execute(
+                f"""SELECT description, photos FROM hotels
+                    WHERE request_id = {id}
+                """
+            )
+
+            return cur.fetchall()
+
+        return []
+
+    def initialize_handler(self, message: Message) -> None:
+        if cur:
+            cur.execute(
+                f"""SELECT id, command, date_time FROM requests
+                    WHERE user_id = {message.from_user.id}
+                """
+            )
+
+            result = cur.fetchall()
+
+            for i, item in enumerate(result):
+                rest_data = self.__get_hotel_info_by_request_id(item[0])
+                data = list(item)
+                data.append(rest_data)
+                result[i] = data
+
+            self.__send_data_to_user(result, message)
+
+    def __send_data_to_user(self, data: List[Any], message: Message) -> None:
+        for item in data:
+            _, command, date_time, hotels = item
+
+            command_and_date = (
+                f"""Команда запроса - {command}.\nДата запроса - {date_time}"""
+            )
+
+            bot.send_message(message.from_user.id, command_and_date)
+
+            if not len(hotels):
+                bot.send_message(
+                    message.from_user.id, "Подходящих отелей не было найдено"
+                )
+
+            for hotel in hotels:
+                description, str_photos = hotel
+
+                if str_photos is None:
+                    bot.send_message(message.from_user.id, description)
+                else:
+                    photos = json.loads(str_photos)
+
+                    bot.send_media_group(
+                        message.from_user.id,
+                        [
+                            InputMediaPhoto(photo, caption=description)
+                            if i == 0
+                            else InputMediaPhoto(photo)
+                            for i, photo in enumerate(photos)
+                        ],
+                    )

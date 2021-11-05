@@ -14,6 +14,14 @@ class User:
         self.__price_range: List[int] = []
         self.__distance_range: List[int] = []
 
+    @classmethod
+    def max_photo_count(cls) -> int:
+        return cls.MAX_PHOTO_COUNT
+
+    @classmethod
+    def max_hotel_count(cls) -> int:
+        return cls.MAX_HOTELS_COUNT
+
     @property
     def city(self) -> str:
         return self.__city
