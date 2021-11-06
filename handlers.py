@@ -522,13 +522,18 @@ class History:
 
             result = cur.fetchall()
 
-            for i, item in enumerate(result):
-                rest_data = self.__get_hotel_info_by_request_id(item[0])
-                data = list(item)
-                data.append(rest_data)
-                result[i] = data
+            if not len(result):
+                bot.send_message(
+                    message.from_user.id, "История запросов пуста"
+                )
+            else:
+                for i, item in enumerate(result):
+                    rest_data = self.__get_hotel_info_by_request_id(item[0])
+                    data = list(item)
+                    data.append(rest_data)
+                    result[i] = data
 
-            self.__send_data_to_user(result, message)
+                self.__send_data_to_user(result, message)
 
     def __send_data_to_user(self, data: List[Any], message: Message) -> None:
         for item in data:
