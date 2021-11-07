@@ -1,0 +1,18 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+requests = "*"
+pytelegrambotapi = "*"
+python-dotenv = "*"
+
+[dev-packages]
+flake8 = "*"
+
+[requires]
+python_version = "3.9"
+
+[scripts]
+lint = "flake8 --exclude=tests --ignore=E121 ."
