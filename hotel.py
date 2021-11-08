@@ -1,4 +1,6 @@
 class Hotel:
+    """Info about hotel"""
+
     def __init__(
         self,
         id: str,

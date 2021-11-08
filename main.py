@@ -12,7 +12,13 @@ handler: Union[
 
 
 @bot.message_handler(content_types=["text"])
-def get_text_message(message: Message):
+def get_text_message(message: Message) -> None:
+    """Handle messages from user
+
+    Args:
+        message (Message): Message object sent from bot
+    """
+
     user: Union[None, User] = None
 
     if Users.has_user(message.from_user.id) is False:
@@ -46,11 +52,17 @@ def get_text_message(message: Message):
 
 
 @bot.callback_query_handler(func=lambda call: True)
-def callback_worker(call: CallbackQuery):
+def callback_worker(call: CallbackQuery) -> None:
+    """Handle user keyboard value
+
+    Args:
+        call (CallbackQuery): CallbackQuery send from bot
+    """
+
     user = Users.get_user(call.from_user.id)
     user.city = call.data
 
-    if handler is not None and not isinstance(handler, History):
+    if handler is not None:
         handler.continue_chain(call)
 
 

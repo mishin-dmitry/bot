@@ -18,16 +18,37 @@ import json
 
 
 class AbsHandler(ABC):
-    @abstractmethod
-    def initialize_handler(self, message: Message) -> None:
-        raise NotImplementedError("method should be implemented")
+    """Abstract class Handler, defined two method should be implemented
+       in subclasses
+
+    Raises:
+        NotImplementedError: if initialize_handler method doesn't implemented
+    """
 
     @abstractmethod
-    def continue_chain(self, call: CallbackQuery) -> None:
+    def initialize_handler(self, message: Message) -> None:
+        """Start user/bot communication chain
+
+        Args:
+            message (Message): Message object sent from bot
+
+        Raises:
+            NotImplementedError: if method doesn't implemented
+        """
         raise NotImplementedError("method should be implemented")
+
+    def continue_chain(self, call: CallbackQuery) -> None:
+        """Continue chain after user chose option from keyboard
+
+        Args:
+            call (CallbackQuery): CallbackQuery send from bot
+        """
+        return
 
 
 class Handler(AbsHandler):
+    """Class for handle /lowprice request"""
+
     def __init__(self, user: User) -> None:
         self.__api = Api()
         self._user = user
@@ -49,6 +70,15 @@ class Handler(AbsHandler):
         bot.register_next_step_handler(call.message, self.__get_hotels_count)
 
     def __get_city_suggestion(self, source: str) -> List[Dict[str, str]]:
+        """Find similar cities with user entered city
+
+        Args:
+            source (str): user entered destination
+
+        Returns:
+            List[Dict[str, str]]: List of destination's data,
+                similar to source destination
+        """
         querystring = {"query": source, "locale": "ru_RU"}
 
         response = self.__api.send_request("/locations/search", querystring)
@@ -72,6 +102,11 @@ class Handler(AbsHandler):
         )
 
     def __get_city(self, message: Message) -> None:
+        """Send available destinations to user with keyboard
+
+        Args:
+            message (Message): Message object sent from bot
+        """
         suggestions = self.__get_city_suggestion(message.text or "")
         keyboard = InlineKeyboardMarkup()
 
@@ -90,6 +125,19 @@ class Handler(AbsHandler):
     def _get_int_float_value(
         self, message: Message, method=int, boundary: Union[int, None] = None
     ) -> int:
+        """Get and parse user int/float value until it will correct
+
+        Args:
+            message (Message): Message object sent from bot
+            method ([type], optional): [description]. Defaults to int.
+                Available int or float,
+                method, using to parse string in int or float.
+            boundary (Union[int, None], optional): [description].
+                Defaults to None. Max value for user input
+
+        Returns:
+            int: float or int user input
+        """
         value = 0
 
         try:
@@ -119,6 +167,12 @@ class Handler(AbsHandler):
         return value
 
     def __get_hotels_count(self, message: Message) -> None:
+        """Get hotels count from user
+
+        Args:
+            message (Message): Message object sent from bot
+        """
+
         self._user.hotels_count = self._get_int_float_value(
             message, boundary=self._user.MAX_HOTELS_COUNT
         )
@@ -135,6 +189,11 @@ class Handler(AbsHandler):
         bot.register_next_step_handler(message, self.__get_photo_access)
 
     def __get_photo_access(self, message: Message) -> None:
+        """Should bot show photo or not
+
+        Args:
+            message (Message): Message object sent from bot
+        """
         if message.text:
             if message.text.lower() == "да":
                 self._user.should_show_photo = True
@@ -156,6 +215,11 @@ class Handler(AbsHandler):
                 )
 
     def __get_photo_count(self, message: Message) -> None:
+        """Get hotels photo count
+
+        Args:
+            message (Message): Message object sent from bot
+        """
         self._user.photo_count = self._get_int_float_value(
             message, boundary=self._user.MAX_PHOTO_COUNT
         )
@@ -168,6 +232,11 @@ class Handler(AbsHandler):
         self._start_collect_data(message)
 
     def _start_collect_data(self, message: Message) -> None:
+        """Start collect data from api
+
+        Args:
+            message (Message): Message object sent from bot
+        """
         bot.send_message(message.from_user.id, "Ожидайте, собираю информацию")
 
         try:
@@ -178,6 +247,12 @@ class Handler(AbsHandler):
             )
 
     def _collect_data(self, message: Message) -> None:
+        """Get hotels from api and added request info into db
+
+        Args:
+            message (Message): Message object sent from bot
+        """
+
         hotels: List[Hotel] = self._get_hotel_suggestions(
             self._user.hotels_count
         )
@@ -208,6 +283,13 @@ class Handler(AbsHandler):
     def _send_info_to_user(
         self, message: Message, hotels: List[Hotel], request_id: int
     ) -> None:
+        """Send info to user
+
+        Args:
+            message (Message): Message object sent from bot
+            hotels (List[Hotel]): found hotels
+            request_id (int): request id from db
+        """
         if not len(hotels):
             bot.send_message(
                 message.from_user.id,
@@ -262,6 +344,14 @@ class Handler(AbsHandler):
                 bot.send_message(message.from_user.id, text)
 
     def __get_hotel_photos(self, id: str) -> List[str]:
+        """Get hotel photos
+
+        Args:
+            id (str): hotel id
+
+        Returns:
+            List[str]: list of images urls
+        """
         raw_data = self.__api.send_request(
             "/properties/get-hotel-photos", {"id": id}
         )
@@ -286,6 +376,16 @@ class Handler(AbsHandler):
     def _get_hotel_suggestions(
         self, page_size: Union[int, None] = None
     ) -> List[Hotel]:
+        """Get hotels suggestions from api
+
+        Args:
+            page_size (Union[int, None], optional): [description].
+                Defaults to None.
+                Count of return hotels
+
+        Returns:
+            List[Hotel]: list of found hotels
+        """
         querystring = {
             "destinationId": self._user.city,
             "pageNumber": "1",
@@ -308,6 +408,14 @@ class Handler(AbsHandler):
         return list(map(self.__extract_info_about_hotel, result))
 
     def __extract_info_about_hotel(self, hotel: Dict[str, Any]) -> Hotel:
+        """Extract needed info about hotel from api response
+
+        Args:
+            hotel (Dict[str, Any]): Info about hotel from api
+
+        Returns:
+            Hotel: needed info about hotel
+        """
         distance_list: List[str] = [
             info["distance"]
             for info in hotel["landmarks"]
@@ -338,6 +446,12 @@ class Handler(AbsHandler):
 
 
 class HighpriceHandler(Handler):
+    """Class to handle /highprice command
+
+    Args:
+        Handler ([type]): Class which handle /lowprice command
+    """
+
     def __init__(self, user: User) -> None:
         super().__init__(user)
 
@@ -346,6 +460,12 @@ class HighpriceHandler(Handler):
 
 
 class BestdealHandler(Handler):
+    """Class to Handle /bestdeal command
+
+    Args:
+        Handler ([type]): Class which handle /lowprice command
+    """
+
     def __init__(self, user: User) -> None:
         super().__init__(user)
 
@@ -360,6 +480,11 @@ class BestdealHandler(Handler):
         bot.register_next_step_handler(message, self.__get_min_price)
 
     def __get_min_price(self, message: Message) -> None:
+        """Get min price for hotel suggestions
+
+        Args:
+            message (Message): Message object sent from bot
+        """
         min: int = self._get_int_float_value(message, float)
 
         if min == 0:
@@ -376,6 +501,11 @@ class BestdealHandler(Handler):
         bot.register_next_step_handler(message, self.__get_max_price)
 
     def __get_max_price(self, message: Message) -> None:
+        """Get max price for hotel suggestions
+
+        Args:
+            message (Message): Message object sent from bot
+        """
         max: int = self._get_int_float_value(message, float)
 
         if max == 0:
@@ -401,6 +531,11 @@ class BestdealHandler(Handler):
         bot.register_next_step_handler(message, self.__get_min_distance)
 
     def __get_min_distance(self, message: Message) -> None:
+        """Get min distance for hotel suggestions
+
+        Args:
+            message (Message): Message object sent from bot
+        """
         min: int = self._get_int_float_value(message, float)
 
         if min == 0:
@@ -417,6 +552,11 @@ class BestdealHandler(Handler):
         bot.register_next_step_handler(message, self.__get_max_distance)
 
     def __get_max_distance(self, message: Message) -> None:
+        """Get max price for hotel suggestions
+
+        Args:
+            message (Message): Message object sent from bot
+        """
         max: int = self._get_int_float_value(message, float)
 
         if max == 0:
@@ -440,6 +580,14 @@ class BestdealHandler(Handler):
         self._collect_data(message)
 
     def __find_appropriate_hotels(self, hotels: List[Hotel]) -> List[Hotel]:
+        """Find hotels appropriate user conditions
+
+        Args:
+            hotels (List[Hotel]): All hotels available in user destination
+
+        Returns:
+            List[Hotel]: List of appropriate hotels
+        """
         result = []
 
         price_min, price_max = self._user.price_range
@@ -499,8 +647,22 @@ class BestdealHandler(Handler):
             self._send_info_to_user(message, hotels, request_id)
 
 
-class History:
+class History(AbsHandler):
+    """Class handle /history command
+
+    Args:
+        AbsHandler ([type]): Abstract handler
+    """
+
     def __get_hotel_info_by_request_id(self, id: int) -> List[Tuple]:
+        """Return hotel description and photos
+
+        Args:
+            id (int): request id from db
+
+        Returns:
+            List[Tuple]: List of hotels description and photos
+        """
         if cur:
             cur.execute(
                 f"""SELECT description, photos FROM hotels
@@ -536,6 +698,12 @@ class History:
                 self.__send_data_to_user(result, message)
 
     def __send_data_to_user(self, data: List[Any], message: Message) -> None:
+        """Send history info to user
+
+        Args:
+            data (List[Any]): List of histories
+            message (Message): Message object sent from bot
+        """
         for item in data:
             _, command, date_time, hotels = item
 
