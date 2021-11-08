@@ -29,7 +29,13 @@ def get_text_message(message: Message) -> None:
         message.text.lower() in ["привет", "/start", "/hello-world"]
     ):
         bot.send_message(message.from_user.id, "Привет, чем я могу помочь?")
-    elif message.text in ["/lowprice", "/highprice", "/bestdeal", "/history"]:
+    elif message.text in [
+        "/lowprice",
+        "/highprice",
+        "/bestdeal",
+        "/history",
+        "/help",
+    ]:
         user = Users.get_user(message.from_user.id)
         user.clear_data()
 
@@ -41,8 +47,17 @@ def get_text_message(message: Message) -> None:
             handler = HighpriceHandler(user)
         elif message.text == "/history":
             handler = History()
-        else:
+        elif message.text == "/bestdeal":
             handler = BestdealHandler(user)
+        else:
+            bot.send_message(
+                message.from_user.id,
+                "1. /lowprice - поиск список отелей по возрастанию цены\n2."
+                " /highprice - поиск  отелей по убыванию цены\n3. /bestdeal -"
+                " поиск отелей по соотношению цены и удаленности от центра\n4."
+                " /history - выведет историю запросов",
+            )
+            return
 
         handler.initialize_handler(message)
     else:
