@@ -18,11 +18,6 @@ with sq.connect(
 ) as con:
     cur = con.cursor()
 
-    # cur.execute(
-    #     """CREATE TABLE IF NOT EXISTS users
-    #     (user_id INTEGER, UNIQUE(user_id))"""
-    # )
-
     cur.execute(
         """CREATE TABLE IF NOT EXISTS requests(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
