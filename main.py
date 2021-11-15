@@ -1,14 +1,15 @@
 from typing import Union
 from loaders import bot
 from telebot.types import CallbackQuery, Message
-from handlers import BestdealHandler, HighpriceHandler, Handler, History
+from handlers.bestdeal import Bestdeal
+from handlers.highprice import Highprice
+from handlers.lowprice import Lowprice
+from handlers.history import History
 from user import User
 from users import Users
 
 
-handler: Union[
-    Handler, HighpriceHandler, BestdealHandler, History, None
-] = None
+handler: Union[Lowprice, Highprice, Bestdeal, History, None] = None
 
 
 @bot.message_handler(content_types=["text"])
@@ -42,13 +43,13 @@ def get_text_message(message: Message) -> None:
         global handler
 
         if message.text == "/lowprice":
-            handler = Handler(user)
+            handler = Lowprice(user)
         elif message.text == "/highprice":
-            handler = HighpriceHandler(user)
+            handler = Highprice(user)
         elif message.text == "/history":
             handler = History()
         elif message.text == "/bestdeal":
-            handler = BestdealHandler(user)
+            handler = Bestdeal(user)
         else:
             bot.send_message(
                 message.from_user.id,
